@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/navigation'
 import { Trash2, Eye, EyeOff } from 'lucide-react'
+import { secureGetItem } from '@/lib/storage'
 
 interface BlockedIP {
   _id: string

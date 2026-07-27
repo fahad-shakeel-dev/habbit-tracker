@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { Menu, X, LogOut, Lock, Trash2, Calendar, BookOpen, Lock as LockIcon, BarChart3, Shield } from 'lucide-react'
+import { secureGetItem, secureRemoveItem } from '@/lib/storage'
 
 interface DestructionModalProps {
   isOpen: boolean
@@ -81,8 +82,8 @@ export default function Navigation() {
   const router = useRouter()
   const pathname = usePathname()
 
-  const isAdmin = typeof window !== 'undefined' ? localStorage.getItem('is_admin') === 'true' : false
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+  const isAdmin = typeof window !== 'undefined' ? secureGetItem('is_admin') === 'true' : false
+  const token = typeof window !== 'undefined' ? secureGetItem('auth_token') : null
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -93,9 +94,9 @@ export default function Navigation() {
   ]
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('user_id')
-    localStorage.removeItem('is_admin')
+    secureRemoveItem('auth_token')
+    secureRemoveItem('user_id')
+    secureRemoveItem('is_admin')
     router.push('/')
   }
 

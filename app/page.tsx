@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthPage from '@/components/auth-page'
 import HabitTracker from '@/components/habit-tracker'
+import { secureGetItem } from '@/lib/storage'
 
 export default function Home() {
   const router = useRouter()
@@ -12,7 +13,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token')
+    const storedToken = secureGetItem('auth_token')
     setToken(storedToken)
     setLoading(false)
   }, [])
