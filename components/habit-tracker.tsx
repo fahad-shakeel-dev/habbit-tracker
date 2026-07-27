@@ -116,6 +116,12 @@ export default function HabitTracker() {
     const isCurrentlyChecked = taskCompletions.has(day)
     const completed = !isCurrentlyChecked
 
+    // Optimistic update — reflect instantly in UI before API responds
+    const optimisticSet = new Set(taskCompletions)
+    if (completed) optimisticSet.add(day)
+    else optimisticSet.delete(day)
+    setCompletions(prev => ({ ...prev, [taskId]: optimisticSet }))
+
     try {
       const response = await fetch('/api/completions', {
         method: 'POST',
@@ -123,17 +129,14 @@ export default function HabitTracker() {
         body: JSON.stringify({ habitId: taskId, day, completed, year, month }),
       })
 
-      if (response.ok) {
-        const newSet = new Set(taskCompletions)
-        if (completed) {
-          newSet.add(day)
-        } else {
-          newSet.delete(day)
-        }
-        setCompletions({ ...completions, [taskId]: newSet })
+      if (!response.ok) {
+        // Revert on failure
+        setCompletions(prev => ({ ...prev, [taskId]: new Set(taskCompletions) }))
       }
     } catch (error) {
       console.error('Error toggling day:', error)
+      // Revert on error
+      setCompletions(prev => ({ ...prev, [taskId]: new Set(taskCompletions) }))
     }
   }
 
@@ -356,13 +359,14 @@ export default function HabitTracker() {
                         const isToday = viewingCurrent && dayNum === today
                         const isFuture = viewingCurrent && dayNum > today
                         const isPast = viewingCurrent && dayNum < today
+                        const isMissed = isPast && !isChecked   // past + not done = missed
                         // Only today is interactive; past and future are locked
                         const isLocked = !viewingCurrent || isFuture || isPast
                         return (
                           <td
                             key={`day-${dayNum}`}
                             className={`px-0.5 sm:px-1 py-1 sm:py-2 text-center border-r border-gray-200 ${
-                              isToday ? 'bg-yellow-50' : isPast ? 'bg-gray-50/60' : ''
+                              isToday ? 'bg-yellow-50' : isMissed ? 'bg-red-50/40' : isPast ? 'bg-gray-50/60' : ''
                             }`}
                           >
                             <button
@@ -375,15 +379,15 @@ export default function HabitTracker() {
                                   ? 'bg-green-400 border-2 border-green-500 text-white shadow-md hover:bg-green-500'
                                   : isChecked
                                   ? 'bg-green-300 border-2 border-green-400 text-white cursor-not-allowed opacity-80'
+                                  : isMissed
+                                  ? 'bg-red-100 border border-red-300 text-red-400 cursor-not-allowed'
                                   : isFuture || !viewingCurrent
                                   ? 'bg-gray-100 border border-gray-200 text-gray-200 cursor-not-allowed'
-                                  : isPast
-                                  ? 'bg-gray-100 border border-gray-200 text-gray-300 cursor-not-allowed'
                                   : 'bg-white border border-gray-300 text-gray-300 hover:bg-gray-100 hover:border-gray-400'
                               }`}
-                              title={`${task.name} - ${getDayHeaderLabel(dayNum)}${isFuture ? ' (future)' : isPast ? ' (past — locked)' : ''}`}
+                              title={`${task.name} - ${getDayHeaderLabel(dayNum)}${isFuture ? ' (future)' : isMissed ? ' (missed)' : isPast ? ' (done)' : ''}`}
                             >
-                              {isChecked ? '✓' : ''}
+                              {isChecked ? '✓' : isMissed ? '✕' : ''}
                             </button>
                           </td>
                         )

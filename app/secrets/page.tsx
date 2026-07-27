@@ -4,12 +4,27 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/navigation'
 import { secureGetItem } from '@/lib/storage'
-import { Plus, Trash2, Eye, EyeOff, Lock, X, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Lock, X, ShieldCheck, Loader2 } from 'lucide-react'
 
 interface Secret {
   _id: string
   content: string
   createdAt: string
+}
+
+function normaliseId(raw: any): string {
+  if (!raw) return ''
+  if (typeof raw === 'string') return raw
+  if (raw.$oid) return raw.$oid
+  return String(raw)
+}
+
+function normaliseSecret(s: any): Secret {
+  return {
+    _id: normaliseId(s._id),
+    content: s.content ?? '',
+    createdAt: s.createdAt ?? new Date().toISOString(),
+  }
 }
 
 export default function SecretsPage() {
@@ -20,9 +35,11 @@ export default function SecretsPage() {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set())
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [saveOk, setSaveOk] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const token = typeof window !== 'undefined' ? secureGetItem('auth_token') : null
 
@@ -35,12 +52,21 @@ export default function SecretsPage() {
     if (showForm) setTimeout(() => textareaRef.current?.focus(), 50)
   }, [showForm])
 
+  const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3500)
+  }
+
   const fetchSecrets = async () => {
     try {
       const res = await fetch('/api/secrets', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) setSecrets(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setSecrets(Array.isArray(data) ? data.map(normaliseSecret) : [])
+      }
     } catch { /* silent */ }
     finally { setLoading(false) }
   }
@@ -49,40 +75,74 @@ export default function SecretsPage() {
     e.preventDefault()
     setError('')
     if (!content.trim()) { setError('Please write something first.'); return }
+
+    // Optimistic: add temp entry instantly
+    const tempId = `temp_${Date.now()}`
+    const savedContent = content.trim()
+    const tempSecret: Secret = {
+      _id: tempId,
+      content: savedContent,
+      createdAt: new Date().toISOString(),
+    }
+    setSecrets(prev => [tempSecret, ...prev])
+    setContent('')
+    setShowForm(false)
     setSubmitting(true)
+
     try {
       const res = await fetch('/api/secrets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: savedContent }),
       })
       if (res.ok) {
-        const s = await res.json()
-        setSecrets(prev => [s, ...prev])
-        setContent('')
-        setShowForm(false)
-        setSaveOk(true)
-        setTimeout(() => setSaveOk(false), 3000)
+        const real = normaliseSecret(await res.json())
+        setSecrets(prev => prev.map(s => s._id === tempId ? real : s))
+        showToast('Secret saved & encrypted.')
       } else {
-        const d = await res.json()
-        setError(d.error || 'Failed to save secret.')
+        setSecrets(prev => prev.filter(s => s._id !== tempId))
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error || 'Failed to save secret.', 'err')
+        setContent(savedContent)
+        setShowForm(true)
       }
     } catch {
-      setError('Network error. Please try again.')
+      setSecrets(prev => prev.filter(s => s._id !== tempId))
+      showToast('Network error — secret not saved.', 'err')
+      setContent(savedContent)
+      setShowForm(true)
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Permanently delete this secret?')) return
+    if (!confirm('Permanently delete this secret? This cannot be undone.')) return
+
+    // Optimistic: remove instantly
+    const removed = secrets.find(s => s._id === id)
+    setSecrets(prev => prev.filter(s => s._id !== id))
+    setRevealedIds(prev => { const n = new Set(prev); n.delete(id); return n })
+    setDeletingId(id)
+
     try {
       const res = await fetch(`/api/secrets/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) setSecrets(prev => prev.filter(s => s._id !== id))
-    } catch { /* silent */ }
+      if (res.ok) {
+        showToast('Secret deleted.')
+      } else {
+        if (removed) setSecrets(prev => [removed, ...prev])
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error || 'Failed to delete secret.', 'err')
+      }
+    } catch {
+      if (removed) setSecrets(prev => [removed, ...prev])
+      showToast('Network error — secret not deleted.', 'err')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const toggleReveal = (id: string) => {
@@ -93,10 +153,13 @@ export default function SecretsPage() {
     })
   }
 
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric',
-    })
+  const fmt = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric',
+      })
+    } catch { return iso }
+  }
 
   return (
     <>
@@ -119,7 +182,7 @@ export default function SecretsPage() {
             </div>
             {!showForm && (
               <button
-                onClick={() => setShowForm(true)}
+                onClick={() => { setShowForm(true); setError('') }}
                 className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4" />
@@ -129,10 +192,17 @@ export default function SecretsPage() {
           </div>
 
           {/* Toast */}
-          {saveOk && (
-            <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-green-500 shrink-0" />
-              Secret saved & encrypted.
+          {toast && (
+            <div className={`mb-4 px-4 py-3 text-sm rounded-xl flex items-center gap-2 border ${
+              toast.type === 'ok'
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}>
+              {toast.type === 'ok'
+                ? <ShieldCheck className="w-4 h-4 shrink-0" />
+                : <span className="shrink-0">✕</span>
+              }
+              {toast.msg}
             </div>
           )}
 
@@ -176,9 +246,10 @@ export default function SecretsPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
+                    className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
                   >
-                    {submitting ? 'Encrypting & saving…' : 'Save Secret'}
+                    {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {submitting ? 'Encrypting…' : 'Save Secret'}
                   </button>
                   <button
                     type="button"
@@ -194,7 +265,9 @@ export default function SecretsPage() {
 
           {/* List */}
           {loading ? (
-            <div className="text-center py-16 text-gray-400 text-sm">Loading your secrets…</div>
+            <div className="flex items-center justify-center py-20 gap-2 text-gray-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading your secrets…
+            </div>
           ) : secrets.length === 0 ? (
             <div className="text-center py-20 bg-white border border-gray-100 rounded-2xl">
               <Lock className="w-10 h-10 text-gray-200 mx-auto mb-3" />
@@ -205,47 +278,60 @@ export default function SecretsPage() {
             <div className="space-y-3">
               {secrets.map((secret, i) => {
                 const revealed = revealedIds.has(secret._id)
+                const isTemp = secret._id.startsWith('temp_')
+                const isDeleting = deletingId === secret._id
                 return (
                   <div
                     key={secret._id}
-                    className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-colors ${
-                      revealed ? 'border-violet-200' : 'border-gray-100'
+                    className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${
+                      isTemp || isDeleting
+                        ? 'opacity-60 border-gray-100'
+                        : revealed ? 'border-violet-200' : 'border-gray-100'
                     }`}
                   >
                     <div className="px-5 py-4 flex items-center justify-between">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-xs font-bold text-violet-500 bg-violet-50 rounded-lg px-2 py-1 shrink-0">
-                          #{secrets.length - i}
+                          {isTemp
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : `#${secrets.length - i}`
+                          }
                         </span>
                         <div>
                           <p className="text-xs text-gray-400">{fmt(secret.createdAt)}</p>
-                          <p className={`text-sm mt-0.5 ${revealed ? 'text-gray-300 italic' : ''}`}>
-                            {revealed ? '' : '🔒 Hidden'}
+                          <p className="text-sm mt-0.5 text-gray-400 italic">
+                            {isTemp ? 'Encrypting…' : revealed ? '' : '🔒 Hidden'}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-3">
-                        <button
-                          onClick={() => toggleReveal(secret._id)}
-                          className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-                            revealed
-                              ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          {revealed ? 'Hide' : 'Reveal'}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(secret._id)}
-                          className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {!isTemp && (
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <button
+                            onClick={() => toggleReveal(secret._id)}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                              revealed
+                                ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            {revealed ? 'Hide' : 'Reveal'}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(secret._id)}
+                            disabled={isDeleting}
+                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                            title="Delete"
+                          >
+                            {isDeleting
+                              ? <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                              : <Trash2 className="w-4 h-4" />
+                            }
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {revealed && (
+                    {revealed && !isTemp && (
                       <div className="px-5 pb-4 pt-0 border-t border-violet-100">
                         <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-violet-50 rounded-xl p-4">
                           {secret.content}

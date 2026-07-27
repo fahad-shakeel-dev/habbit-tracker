@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/navigation'
 import { secureGetItem } from '@/lib/storage'
 import {
   ChevronLeft, ChevronRight, AlertTriangle,
-  Lightbulb, Target, CheckCircle, BookOpen, Calendar
+  Lightbulb, Target, CheckCircle, BookOpen,
+  Calendar, Loader2
 } from 'lucide-react'
 
 interface Reflection {
@@ -18,6 +19,24 @@ interface Reflection {
   createdAt: string
 }
 
+function normaliseId(raw: any): string {
+  if (!raw) return ''
+  if (typeof raw === 'string') return raw
+  if (raw.$oid) return raw.$oid
+  return String(raw)
+}
+
+function normaliseReflection(r: any): Reflection {
+  return {
+    _id: normaliseId(r._id),
+    date: r.date ?? '',
+    mistakes: r.mistakes ?? '',
+    learnings: r.learnings ?? '',
+    goals: r.goals ?? '',
+    createdAt: r.createdAt ?? new Date().toISOString(),
+  }
+}
+
 export default function ReflectionsPage() {
   const router = useRouter()
   const [reflections, setReflections] = useState<Reflection[]>([])
@@ -27,10 +46,11 @@ export default function ReflectionsPage() {
   const [learnings, setLearnings] = useState('')
   const [goals, setGoals] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [saveOk, setSaveOk] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
   const [error, setError] = useState('')
   const [yesterdayRef, setYesterdayRef] = useState<Reflection | null>(null)
   const [activeTab, setActiveTab] = useState<'write' | 'history'>('write')
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const token = typeof window !== 'undefined' ? secureGetItem('auth_token') : null
   const todayStr = new Date().toISOString().split('T')[0]
@@ -52,12 +72,21 @@ export default function ReflectionsPage() {
     setYesterdayRef(reflections.find(r => r.date === yd.toISOString().split('T')[0]) || null)
   }, [currentDate, reflections])
 
+  const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3500)
+  }
+
   const fetchReflections = async () => {
     try {
       const res = await fetch('/api/reflections', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) setReflections(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setReflections(Array.isArray(data) ? data.map(normaliseReflection) : [])
+      }
     } catch { /* silent */ }
     finally { setLoading(false) }
   }
@@ -69,30 +98,60 @@ export default function ReflectionsPage() {
       setError('Mistakes and learnings are both required.')
       return
     }
+
+    const savedMistakes = mistakes.trim()
+    const savedLearnings = learnings.trim()
+    const savedGoals = goals.trim()
+    const existingIdx = reflections.findIndex(r => r.date === currentDate)
+
+    // Optimistic: update local state immediately
+    const optimisticRef: Reflection = {
+      _id: existingIdx >= 0 ? reflections[existingIdx]._id : `temp_${Date.now()}`,
+      date: currentDate,
+      mistakes: savedMistakes,
+      learnings: savedLearnings,
+      goals: savedGoals,
+      createdAt: existingIdx >= 0 ? reflections[existingIdx].createdAt : new Date().toISOString(),
+    }
+
+    setReflections(prev => {
+      if (existingIdx >= 0) {
+        const u = [...prev]; u[existingIdx] = optimisticRef; return u
+      }
+      return [optimisticRef, ...prev]
+    })
+    showToast(`Reflection saved for ${fmtShort(currentDate)}.`)
     setSubmitting(true)
+
     try {
       const res = await fetch('/api/reflections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ mistakes, learnings, goals }),
+        body: JSON.stringify({ mistakes: savedMistakes, learnings: savedLearnings, goals: savedGoals }),
       })
       if (res.ok) {
-        const result = await res.json()
-        setReflections(prev => {
-          const idx = prev.findIndex(r => r.date === currentDate)
-          if (idx >= 0) {
-            const u = [...prev]; u[idx] = result; return u
-          }
-          return [result, ...prev]
-        })
-        setSaveOk(true)
-        setTimeout(() => setSaveOk(false), 3000)
+        const real = normaliseReflection(await res.json())
+        // Replace optimistic entry with server-confirmed one
+        setReflections(prev => prev.map(r =>
+          r.date === currentDate ? real : r
+        ))
       } else {
-        const d = await res.json()
-        setError(d.error || 'Failed to save reflection.')
+        // Revert
+        setReflections(prev => {
+          if (existingIdx >= 0 && prev[existingIdx]?._id === optimisticRef._id) {
+            const u = [...prev]
+            u[existingIdx] = reflections[existingIdx]
+            return u
+          }
+          return prev.filter(r => r._id !== optimisticRef._id)
+        })
+        const d = await res.json().catch(() => ({}))
+        showToast(d.error || 'Failed to save reflection.', 'err')
       }
     } catch {
-      setError('Network error. Please try again.')
+      // Revert
+      setReflections(prev => prev.filter(r => r._id !== optimisticRef._id || existingIdx >= 0))
+      showToast('Network error — reflection not saved.', 'err')
     } finally {
       setSubmitting(false)
     }
@@ -105,17 +164,21 @@ export default function ReflectionsPage() {
     if (next <= todayStr) setCurrentDate(next)
   }
 
-  const fmtDate = (iso: string) =>
-    new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
-      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-    })
+  const fmtDate = (iso: string) => {
+    try {
+      return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+      })
+    } catch { return iso }
+  }
 
-  const fmtShort = (iso: string) =>
-    new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric',
-    })
-
-  const hasToday = reflections.some(r => r.date === todayStr)
+  const fmtShort = (iso: string) => {
+    try {
+      return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric',
+      })
+    } catch { return iso }
+  }
 
   // Streak calculation
   let streak = 0
@@ -128,6 +191,7 @@ export default function ReflectionsPage() {
   }
 
   const currentRef = reflections.find(r => r.date === currentDate)
+  // Past date that already has a saved reflection = read only
   const isReadOnly = currentDate < todayStr && !!currentRef
 
   return (
@@ -147,26 +211,49 @@ export default function ReflectionsPage() {
               </div>
               <p className="text-sm text-gray-400">
                 {reflections.length} days reflected
-                {streak > 0 && <span className="ml-2 text-orange-500 font-medium">🔥 {streak}d streak</span>}
+                {streak > 0 && (
+                  <span className="ml-2 text-orange-500 font-medium">🔥 {streak}d streak</span>
+                )}
               </p>
             </div>
+
             {/* Tab toggle */}
             <div className="flex bg-gray-100 rounded-xl p-1 gap-1 text-xs font-semibold">
               <button
                 onClick={() => setActiveTab('write')}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'write' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  activeTab === 'write' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
                 Write
               </button>
               <button
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  activeTab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
                 History
               </button>
             </div>
           </div>
 
+          {/* Toast */}
+          {toast && (
+            <div className={`mb-4 px-4 py-3 text-sm rounded-xl flex items-center gap-2 border ${
+              toast.type === 'ok'
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}>
+              {toast.type === 'ok'
+                ? <CheckCircle className="w-4 h-4 shrink-0" />
+                : <span className="shrink-0">✕</span>
+              }
+              {toast.msg}
+            </div>
+          )}
+
+          {/* ── WRITE TAB ── */}
           {activeTab === 'write' && (
             <>
               {/* Date navigator */}
@@ -205,17 +292,13 @@ export default function ReflectionsPage() {
                 <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-4 flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-1">Yesterday's mistakes — don't repeat</p>
-                    <p className="text-sm text-orange-800 whitespace-pre-wrap leading-relaxed">{yesterdayRef.mistakes}</p>
+                    <p className="text-xs font-bold text-orange-700 uppercase tracking-wide mb-1">
+                      Yesterday's mistakes — don't repeat
+                    </p>
+                    <p className="text-sm text-orange-800 whitespace-pre-wrap leading-relaxed">
+                      {yesterdayRef.mistakes}
+                    </p>
                   </div>
-                </div>
-              )}
-
-              {/* Toast */}
-              {saveOk && (
-                <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                  Reflection saved for {fmtShort(currentDate)}.
                 </div>
               )}
 
@@ -290,8 +373,9 @@ export default function ReflectionsPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white font-semibold py-3 rounded-2xl transition-colors text-sm shadow-sm"
+                    className="w-full bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 text-white font-semibold py-3 rounded-2xl transition-colors text-sm shadow-sm flex items-center justify-center gap-2"
                   >
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {submitting ? 'Saving…' : currentRef ? 'Update Reflection' : 'Save Reflection'}
                   </button>
                 )}
@@ -299,6 +383,7 @@ export default function ReflectionsPage() {
             </>
           )}
 
+          {/* ── HISTORY TAB ── */}
           {activeTab === 'history' && (
             <div>
               {/* Stats strip */}
@@ -315,9 +400,10 @@ export default function ReflectionsPage() {
                 ))}
               </div>
 
-              {/* Timeline */}
               {loading ? (
-                <div className="text-center py-12 text-gray-400 text-sm">Loading history…</div>
+                <div className="flex items-center justify-center py-16 gap-2 text-gray-400 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading history…
+                </div>
               ) : reflections.length === 0 ? (
                 <div className="text-center py-16 bg-white border border-gray-100 rounded-2xl">
                   <Lightbulb className="w-10 h-10 text-gray-200 mx-auto mb-3" />
@@ -361,6 +447,7 @@ export default function ReflectionsPage() {
               )}
             </div>
           )}
+
         </div>
       </div>
     </>
