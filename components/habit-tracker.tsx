@@ -289,7 +289,8 @@ export default function HabitTracker() {
             <p className="text-gray-500 text-sm sm:text-base">Add your first habit to get started!</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-x-auto" ref={tableScrollRef}>
+          <div className="rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto bg-white" ref={tableScrollRef}>
             <table className="w-full border-collapse text-xs sm:text-sm">
               {/* Header Row */}
               <thead>
@@ -406,10 +407,11 @@ export default function HabitTracker() {
                 })}
               </tbody>
             </table>
+          </div>
 
-            {/* Progress Footer */}
+            {/* Progress Footer — fixed at bottom */}
             {tasks.length > 0 && (
-              <div className="bg-green-500 text-white px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t-2 border-green-600 flex-wrap">
+              <div className="bg-green-500 text-white px-2 sm:px-3 py-1 sm:py-2 text-xs sm:text-sm font-semibold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t-2 border-green-600 flex-wrap sticky bottom-0">
                 <span className="whitespace-nowrap">
                   {viewingCurrent ? 'Monthly Progress:' : `${monthName} History:`}
                 </span>
