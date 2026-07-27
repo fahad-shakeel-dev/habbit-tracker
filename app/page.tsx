@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import AuthPage from '@/components/auth-page'
 import HabitTracker from '@/components/habit-tracker'
 
@@ -26,5 +27,20 @@ export default function Home() {
     )
   }
 
-  return token ? <HabitTracker /> : <AuthPage />
+  if (!token) return <AuthPage />
+
+  return (
+    <div className="relative">
+      {/* Subtle star link to dashboard — top-right corner */}
+      <Link
+        href="/dashboard"
+        title="Go to Dashboard"
+        className="fixed top-3 right-3 z-50 text-yellow-400 hover:text-yellow-500 transition-colors leading-none"
+        style={{ fontSize: '18px', lineHeight: 1 }}
+      >
+        ★
+      </Link>
+      <HabitTracker />
+    </div>
+  )
 }

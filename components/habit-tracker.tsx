@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -20,6 +20,8 @@ export default function HabitTracker() {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const todayColRef = useRef<HTMLTableCellElement>(null)
 
   const year = currentMonth.getFullYear()
   const month = currentMonth.getMonth() + 1 // 1-indexed
@@ -134,6 +136,22 @@ export default function HabitTracker() {
       console.error('Error toggling day:', error)
     }
   }
+
+  // Scroll to today's column when month changes or on initial load
+  useEffect(() => {
+    if (!isCurrentMonth()) return
+    // Small delay so the table has rendered
+    const timer = setTimeout(() => {
+      if (todayColRef.current && tableScrollRef.current) {
+        const container = tableScrollRef.current
+        const cell = todayColRef.current
+        // Scroll so today's column is roughly centered
+        const offset = cell.offsetLeft - container.clientWidth / 2 + cell.offsetWidth / 2
+        container.scrollLeft = Math.max(0, offset)
+      }
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [currentMonth, isLoading])
 
   const goToPrevMonth = () =>
     setCurrentMonth(new Date(year, month - 2))
@@ -271,12 +289,12 @@ export default function HabitTracker() {
             <p className="text-gray-500 text-sm sm:text-base">Add your first habit to get started!</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-x-auto">
+          <div className="bg-white rounded-lg shadow overflow-x-auto" ref={tableScrollRef}>
             <table className="w-full border-collapse text-xs sm:text-sm">
               {/* Header Row */}
               <thead>
                 <tr className="bg-gradient-to-r from-green-500 to-emerald-600 text-white sticky top-0">
-                  <th className="px-2 sm:px-3 py-1 sm:py-2 text-left font-semibold border-r border-emerald-700 whitespace-nowrap" style={{ minWidth: '80px' }}>
+                  <th className="px-2 sm:px-3 py-1 sm:py-2 text-left font-semibold border-r border-emerald-700 whitespace-nowrap sticky left-0 z-20 bg-emerald-600" style={{ minWidth: '80px' }}>
                     Activities
                   </th>
                   {Array.from({ length: daysInMonth }).map((_, dayIndex) => {
@@ -285,6 +303,7 @@ export default function HabitTracker() {
                     return (
                       <th
                         key={`day-${dayNum}`}
+                        ref={isToday ? todayColRef : undefined}
                         className={`px-0.5 sm:px-1 py-1 sm:py-2 text-center font-semibold border-r border-emerald-700 ${
                           isToday ? 'bg-yellow-400 text-green-900' : 'bg-emerald-700'
                         }`}
@@ -310,7 +329,7 @@ export default function HabitTracker() {
                       className={taskIndex % 2 === 0 ? 'bg-gray-50 hover:bg-gray-100' : 'bg-white hover:bg-gray-50'}
                     >
                       {/* Task Name */}
-                      <td className="px-2 sm:px-3 py-1 sm:py-2 font-semibold text-gray-700 border-r border-gray-200">
+                      <td className={`px-2 sm:px-3 py-1 sm:py-2 font-semibold text-gray-700 border-r border-gray-200 sticky left-0 z-10 ${taskIndex % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex flex-col min-w-0">
                             <span className="truncate flex-1 text-xs sm:text-sm">{task.name}</span>
@@ -335,24 +354,33 @@ export default function HabitTracker() {
                         const isChecked = completions[task.id]?.has(dayNum)
                         const isToday = viewingCurrent && dayNum === today
                         const isFuture = viewingCurrent && dayNum > today
+                        const isPast = viewingCurrent && dayNum < today
+                        // Only today is interactive; past and future are locked
+                        const isLocked = !viewingCurrent || isFuture || isPast
                         return (
                           <td
                             key={`day-${dayNum}`}
                             className={`px-0.5 sm:px-1 py-1 sm:py-2 text-center border-r border-gray-200 ${
-                              isToday ? 'bg-yellow-50' : ''
+                              isToday ? 'bg-yellow-50' : isPast ? 'bg-gray-50/60' : ''
                             }`}
                           >
                             <button
-                              onClick={() => !isFuture && viewingCurrent ? toggleDay(task.id, dayNum) : undefined}
-                              disabled={isFuture || !viewingCurrent}
+                              onClick={() => !isLocked ? toggleDay(task.id, dayNum) : undefined}
+                              disabled={isLocked}
                               className={`w-5 h-5 sm:w-6 sm:h-6 rounded mx-auto text-xs sm:text-sm font-bold transition-all flex items-center justify-center ${
-                                isChecked
+                                isChecked && isPast
+                                  ? 'bg-green-300 border-2 border-green-400 text-white cursor-not-allowed opacity-80'
+                                  : isChecked && isToday
                                   ? 'bg-green-400 border-2 border-green-500 text-white shadow-md hover:bg-green-500'
+                                  : isChecked
+                                  ? 'bg-green-300 border-2 border-green-400 text-white cursor-not-allowed opacity-80'
                                   : isFuture || !viewingCurrent
                                   ? 'bg-gray-100 border border-gray-200 text-gray-200 cursor-not-allowed'
+                                  : isPast
+                                  ? 'bg-gray-100 border border-gray-200 text-gray-300 cursor-not-allowed'
                                   : 'bg-white border border-gray-300 text-gray-300 hover:bg-gray-100 hover:border-gray-400'
                               }`}
-                              title={`${task.name} - ${getDayHeaderLabel(dayNum)}${isFuture ? ' (future)' : ''}`}
+                              title={`${task.name} - ${getDayHeaderLabel(dayNum)}${isFuture ? ' (future)' : isPast ? ' (past — locked)' : ''}`}
                             >
                               {isChecked ? '✓' : ''}
                             </button>

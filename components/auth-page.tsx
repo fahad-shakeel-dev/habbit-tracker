@@ -46,7 +46,7 @@ export default function AuthPage() {
       secureSetItem('user_id', String(data.userId))
       secureSetItem('is_admin', data.isAdmin ? 'true' : 'false')
 
-      router.push('/dashboard')
+      router.push('/')
     } catch (err) {
       setError('An error occurred. Please try again.')
     } finally {
