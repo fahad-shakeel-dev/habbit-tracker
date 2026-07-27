@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     // Decrypt entries before sending
     const decryptedEntries = entries.map(entry => ({
       ...entry,
+      _id: entry._id.toString(),
       mistakes: decrypt(entry.mistakes),
       learnings: decrypt(entry.learnings),
       goals: decrypt(entry.goals),
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
       )
 
       return NextResponse.json({
-        _id: existingReflection._id,
+        _id: existingReflection._id.toString(),
         mistakes,
         learnings,
         goals: goals || '',
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      _id: result.insertedId,
+      _id: result.insertedId.toString(),
       mistakes,
       learnings,
       goals: goals || '',

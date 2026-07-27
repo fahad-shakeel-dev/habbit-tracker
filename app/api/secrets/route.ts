@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     // Decrypt entries before sending
     const decryptedEntries = entries.map(entry => ({
       ...entry,
+      _id: entry._id.toString(),
       content: decrypt(entry.content),
     }))
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      _id: result.insertedId,
+      _id: result.insertedId.toString(),
       content,
       createdAt: new Date(),
     })
