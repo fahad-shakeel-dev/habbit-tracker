@@ -61,9 +61,6 @@ async function openConnection(): Promise<{ client: MongoClient; db: Db }> {
     await db.collection('users').createIndex({ email: 1 }, { unique: true })
     await db.collection('login_attempts').createIndex({ ip: 1 })
     await db.collection('blocked_ips').createIndex({ ip: 1 }, { unique: true })
-    await db.collection('diary_entries').createIndex({ userId: 1, createdAt: -1 })
-    await db.collection('secrets').createIndex({ userId: 1, createdAt: -1 })
-    await db.collection('reflections').createIndex({ userId: 1, date: 1 })
     await db.collection('expenses').createIndex({ userId: 1, date: 1 })
   } catch (error) {
     console.error('Index creation error:', error)

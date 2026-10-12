@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Task {
@@ -17,6 +17,10 @@ export default function HabitTracker() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [completions, setCompletions] = useState<CompletionData>({})
   const [newTaskName, setNewTaskName] = useState('')
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState('')
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
   const [isLoading, setIsLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
@@ -97,17 +101,60 @@ export default function HabitTracker() {
     }
   }
 
+  const startEditing = (task: Task) => {
+    setEditingTask(task)
+    setEditName(task.name)
+    setEditError('')
+  }
+
+  const saveTask = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editingTask || editBusy) return
+    const name = editName.trim()
+    if (!name) {
+      setEditError('Enter a habit name.')
+      return
+    }
+    setEditBusy(true)
+    setEditError('')
+    try {
+      const response = await fetch(`/api/habits/${editingTask.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not save habit.')
+      setTasks(current => current.map(task => task.id === editingTask.id ? { ...task, name: data.name } : task))
+      setEditingTask(null)
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Could not save habit.')
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
   const removeTask = async (taskId: string) => {
+    if (editBusy) return
+    setEditBusy(true)
+    setEditError('')
     try {
       const response = await fetch(`/api/habits/${taskId}`, { method: 'DELETE' })
-      if (response.ok) {
-        setTasks(tasks.filter(t => t.id !== taskId))
-        const newCompletions = { ...completions }
-        delete newCompletions[taskId]
-        setCompletions(newCompletions)
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Could not delete habit.')
       }
+      setTasks(current => current.filter(t => t.id !== taskId))
+      setCompletions(current => {
+        const next = { ...current }
+        delete next[taskId]
+        return next
+      })
+      setEditingTask(null)
     } catch (error) {
-      console.error('Error removing task:', error)
+      setEditError(error instanceof Error ? error.message : 'Could not delete habit.')
+    } finally {
+      setEditBusy(false)
     }
   }
 
@@ -264,6 +311,23 @@ export default function HabitTracker() {
           </div>
         )}
 
+        {editingTask && (
+          <section aria-label="Edit habit" className="mb-4 rounded-lg border border-green-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 font-semibold text-green-800">Edit habit</h2>
+            <form onSubmit={saveTask} className="flex flex-wrap items-end gap-3">
+              <div className="min-w-0 flex-1 basis-48">
+                <label htmlFor="edit-habit-name" className="mb-1 block text-sm font-medium text-gray-700">Habit name</label>
+                <input id="edit-habit-name" autoFocus value={editName} onChange={event => setEditName(event.target.value)} disabled={editBusy} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-200" />
+              </div>
+              <button type="submit" disabled={editBusy} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50">{editBusy ? 'Processing...' : 'Save'}</button>
+              <button type="button" disabled={editBusy} onClick={() => removeTask(editingTask.id)} className="flex items-center gap-1 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"><Trash2 size={16} /> Delete</button>
+              <button type="button" disabled={editBusy} onClick={() => setEditingTask(null)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+            </form>
+            <p className="mt-2 text-xs text-gray-500">Deleting a habit also removes its completion history.</p>
+            {editError && <p role="alert" className="mt-2 text-sm text-red-700">{editError}</p>}
+          </section>
+        )}
+
         {/* Month Navigation */}
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <button
@@ -343,11 +407,14 @@ export default function HabitTracker() {
                           </div>
                           {viewingCurrent && (
                             <button
-                              onClick={() => removeTask(task.id)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-0.5 rounded flex-shrink-0"
-                              title="Delete task"
+                              onClick={() => startEditing(task)}
+                              disabled={editBusy}
+                              className="flex items-center gap-1 text-green-700 hover:text-green-900 hover:bg-green-100 p-1 rounded flex-shrink-0 disabled:opacity-50"
+                              title={`Edit ${task.name}`}
+                              aria-label={`Edit ${task.name}`}
                             >
-                              <X size={14} />
+                              <Pencil size={14} />
+                              <span className="text-xs">Edit</span>
                             </button>
                           )}
                         </div>

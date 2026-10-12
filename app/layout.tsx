@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SecureDiary - Encrypted Personal Journal',
-  description: 'Your encrypted personal journal with military-grade AES-256 security. Store diary entries, secrets, and daily reflections completely encrypted.',
+  title: 'Habit Tracker - Habits and Daily Expenses',
+  description: 'Track your daily habits, record expenses, and see how much you spend each day.',
   generator: 'v0.app',
   icons: {
     icon: [

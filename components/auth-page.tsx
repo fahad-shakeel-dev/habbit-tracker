@@ -92,8 +92,8 @@ export default function AuthPage({
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-4">
             <Lock className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-green-800 mb-2">SecureDiary</h1>
-          <p className="text-gray-600">Your encrypted personal journal</p>
+          <h1 className="text-4xl font-bold text-green-800 mb-2">Habit Tracker</h1>
+          <p className="text-gray-600">Track your habits and daily expenses</p>
         </div>
 
         {/* Auth Card */}
@@ -191,7 +191,7 @@ export default function AuthPage({
         {/* Security Info */}
         <div className="bg-white rounded-lg shadow p-4 text-center">
           <p className="text-xs text-gray-600">
-            🔒 Your data is encrypted with AES-256 encryption. Even we cannot see your personal information.
+            Sign in to manage your habits and daily spending.
           </p>
         </div>
       </div>

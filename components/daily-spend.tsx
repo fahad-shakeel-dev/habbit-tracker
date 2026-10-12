@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Wallet } from 'lucide-react'
 
 export default function DailySpend({ token }: { token: string }) {
@@ -39,7 +38,7 @@ export default function DailySpend({ token }: { token: string }) {
   }, [token])
 
   return (
-    <Link href="/expenses" className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-white p-4 shadow-sm hover:bg-emerald-50">
+    <section aria-label="Today's spending" className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-white p-4 shadow-sm">
       <Wallet className="size-6 shrink-0 text-emerald-700" />
       <div className="flex-1">
         <p className="text-sm font-medium text-gray-600">Today's spending</p>
@@ -47,7 +46,6 @@ export default function DailySpend({ token }: { token: string }) {
           {error ? 'Unavailable' : total === null ? 'Loading...' : total.toFixed(2)}
         </p>
       </div>
-      <span className="text-sm font-semibold text-emerald-700">View expenses →</span>
-    </Link>
+    </section>
   )
 }

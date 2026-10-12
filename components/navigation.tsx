@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Menu, X, LogOut, Lock, Trash2, Calendar, BookOpen, Lock as LockIcon, BarChart3, Shield, Wallet } from 'lucide-react'
+import { Menu, X, LogOut, CheckSquare, Trash2, Shield, Wallet } from 'lucide-react'
 import { secureGetItem, secureRemoveItem } from '@/lib/storage'
 
 interface DestructionModalProps {
@@ -31,7 +31,7 @@ function DestructionModal({ isOpen, onClose, onConfirm, loading }: DestructionMo
       <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6">
         <h2 className="text-2xl font-bold text-red-600 mb-4">Auto Destruction</h2>
         <p className="text-gray-700 mb-4">
-          This action will permanently delete all your data including diary entries, secrets, and reflections. This cannot be undone.
+          This action will permanently delete your account and expenses. This cannot be undone.
         </p>
         <p className="text-sm text-red-600 font-semibold mb-6">
           Enter your password to confirm permanent deletion:
@@ -86,10 +86,7 @@ export default function Navigation() {
   const token = typeof window !== 'undefined' ? secureGetItem('auth_token') : null
 
   const navItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
-    { href: '/diary', label: 'Diary', icon: Calendar },
-    { href: '/secrets', label: 'Secrets', icon: LockIcon },
-    { href: '/reflections', label: 'Reflections', icon: BookOpen },
+    { href: '/', label: 'Habits', icon: CheckSquare },
     { href: '/expenses', label: 'Expenses', icon: Wallet },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin Panel', icon: Shield }] : []),
   ]
@@ -136,9 +133,9 @@ export default function Navigation() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <Link href="/dashboard" className="font-bold text-xl flex items-center gap-2">
-              <Lock className="w-6 h-6" />
-              <span className="hidden sm:inline">SecureDiary</span>
+            <Link href="/" className="font-bold text-xl flex items-center gap-2">
+              <CheckSquare className="w-6 h-6" />
+              <span className="hidden sm:inline">Habit Tracker</span>
             </Link>
 
             {/* Desktop Menu */}

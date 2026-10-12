@@ -31,10 +31,10 @@ export default function Home() {
 
   return (
     <div className="relative">
-      {/* Subtle star link to dashboard — top-right corner */}
+      {/* Shortcut to expenses */}
       <Link
-        href="/dashboard"
-        title="Go to Dashboard"
+        href="/expenses"
+        title="Go to Expenses"
         className="fixed top-3 right-3 z-50 text-yellow-400 hover:text-yellow-500 transition-colors leading-none"
         style={{ fontSize: '18px', lineHeight: 1 }}
       >
