@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       getCollection('diary_entries').then(col => col.deleteMany({ userId: userObjId })),
       getCollection('secrets').then(col => col.deleteMany({ userId: userObjId })),
       getCollection('reflections').then(col => col.deleteMany({ userId: userObjId })),
+      getCollection('expenses').then(col => col.deleteMany({ userId: userObjId })),
       getCollection('habits').then(col => col.deleteMany({ userId: userObjId })),
       getCollection('users').then(col => col.deleteOne({ _id: userObjId })),
     ])

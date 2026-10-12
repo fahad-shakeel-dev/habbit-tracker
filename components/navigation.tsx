@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Menu, X, LogOut, Lock, Trash2, Calendar, BookOpen, Lock as LockIcon, BarChart3, Shield } from 'lucide-react'
+import { Menu, X, LogOut, Lock, Trash2, Calendar, BookOpen, Lock as LockIcon, BarChart3, Shield, Wallet } from 'lucide-react'
 import { secureGetItem, secureRemoveItem } from '@/lib/storage'
 
 interface DestructionModalProps {
@@ -90,6 +90,7 @@ export default function Navigation() {
     { href: '/diary', label: 'Diary', icon: Calendar },
     { href: '/secrets', label: 'Secrets', icon: LockIcon },
     { href: '/reflections', label: 'Reflections', icon: BookOpen },
+    { href: '/expenses', label: 'Expenses', icon: Wallet },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin Panel', icon: Shield }] : []),
   ]
 

@@ -22,6 +22,7 @@ export async function connectToDatabase(): Promise<{ client: MongoClient; db: Db
     await db.collection('diary_entries').createIndex({ userId: 1, createdAt: -1 })
     await db.collection('secrets').createIndex({ userId: 1, createdAt: -1 })
     await db.collection('reflections').createIndex({ userId: 1, date: 1 })
+    await db.collection('expenses').createIndex({ userId: 1, date: 1 })
   } catch (error) {
     console.error('Index creation error:', error)
   }
