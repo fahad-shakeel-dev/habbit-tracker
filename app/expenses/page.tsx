@@ -26,6 +26,7 @@ export default function ExpensesPage() {
   const [place, setPlace] = useState('')
   const [amount, setAmount] = useState('')
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loadedDate, setLoadedDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -49,7 +50,10 @@ export default function ExpensesPage() {
         return response.json()
       })
       .then(data => {
-        if (!cancelled) setExpenses(Array.isArray(data) ? data : [])
+        if (!cancelled) {
+          setExpenses(Array.isArray(data) ? data : [])
+          setLoadedDate(date)
+        }
       })
       .catch(() => {
         if (!cancelled) setError('Could not load expenses. Please try again.')
@@ -110,6 +114,7 @@ export default function ExpensesPage() {
   }
 
   const total = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const dailyTotal = loadedDate === date ? total.toFixed(2) : error ? 'Unavailable' : 'Loading...'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
@@ -124,6 +129,15 @@ export default function ExpensesPage() {
             <p className="mt-1 text-sm text-gray-600">Keep a simple record of what you spend.</p>
           </div>
         </header>
+
+        <section aria-label="Daily spending total" className="mb-6 flex items-center gap-4 rounded-xl border border-emerald-200 bg-white p-5 shadow-sm">
+          <Wallet className="size-8 shrink-0 text-emerald-700" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-600">Total spent for selected date</h2>
+            <p aria-live="polite" className="mt-1 text-3xl font-bold tabular-nums text-emerald-800">{dailyTotal}</p>
+            <p className="mt-1 text-sm text-gray-500">{date}</p>
+          </div>
+        </section>
 
         <section className="border-y border-emerald-200 py-5">
           <label htmlFor="expense-date" className="mb-2 block text-sm font-semibold text-gray-800">
@@ -189,7 +203,7 @@ export default function ExpensesPage() {
           <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold text-gray-900">Entries</h2>
             <p className="text-sm text-gray-600">
-              Total <span className="ml-1 font-semibold tabular-nums text-gray-900">{total.toFixed(2)}</span>
+              Total <span className="ml-1 font-semibold tabular-nums text-gray-900">{dailyTotal}</span>
             </p>
           </div>
 

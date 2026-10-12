@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthPage from '@/components/auth-page'
 import HabitTracker from '@/components/habit-tracker'
+import DailySpend from '@/components/daily-spend'
 import { secureGetItem } from '@/lib/storage'
 
 export default function Home() {
-  const router = useRouter()
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -28,7 +27,7 @@ export default function Home() {
     )
   }
 
-  if (!token) return <AuthPage />
+  if (!token) return <AuthPage onAuthenticated={setToken} />
 
   return (
     <div className="relative">
@@ -41,6 +40,9 @@ export default function Home() {
       >
         ★
       </Link>
+      <div className="px-2 pt-8 sm:px-4 md:px-6">
+        <DailySpend token={token} />
+      </div>
       <HabitTracker />
     </div>
   )

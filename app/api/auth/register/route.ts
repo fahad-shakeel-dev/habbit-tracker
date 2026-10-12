@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCollection } from '@/lib/db'
+import { DatabaseUnavailableError, getCollection } from '@/lib/db'
 import { hashPassword } from '@/lib/encryption'
 import { generateToken } from '@/lib/auth-utils'
 import { getClientIp, checkIfIpBlocked } from '@/lib/ip-security'
@@ -57,6 +57,12 @@ export async function POST(request: NextRequest) {
       userId: result.insertedId,
     })
   } catch (error) {
+    if (error instanceof DatabaseUnavailableError) {
+      return NextResponse.json(
+        { error: 'Registration is temporarily unavailable. Please try again later.' },
+        { status: 503 }
+      )
+    }
     console.error('Registration error:', error)
     return NextResponse.json(
       { error: 'Registration failed' },

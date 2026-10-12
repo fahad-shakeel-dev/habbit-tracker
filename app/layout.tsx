@@ -39,7 +39,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-gradient-to-br from-green-50 to-emerald-50">
-      <body className="antialiased">
+      {/* Browser extensions can add attributes to body before hydration. */}
+      <body className="antialiased" suppressHydrationWarning>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

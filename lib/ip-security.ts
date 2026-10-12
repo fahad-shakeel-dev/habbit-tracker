@@ -3,19 +3,14 @@ import { getCollection } from './db'
 
 export function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded ? forwarded.split(',')[0].trim() : request.ip || 'unknown'
+  const ip = forwarded ? forwarded.split(',')[0].trim() : request.headers.get('x-real-ip') || 'unknown'
   return ip
 }
 
 export async function checkIfIpBlocked(ip: string): Promise<boolean> {
-  try {
-    const blockedIps = await getCollection('blocked_ips')
-    const blocked = await blockedIps.findOne({ ip })
-    return !!blocked
-  } catch (error) {
-    console.error('Error checking blocked IP:', error)
-    return false
-  }
+  const blockedIps = await getCollection('blocked_ips')
+  const blocked = await blockedIps.findOne({ ip })
+  return !!blocked
 }
 
 export async function recordLoginAttempt(ip: string, success: boolean): Promise<void> {

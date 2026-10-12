@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCollection } from '@/lib/db'
+import { DatabaseUnavailableError, getCollection } from '@/lib/db'
 import { comparePassword } from '@/lib/encryption'
 import { generateToken } from '@/lib/auth-utils'
 import { getClientIp, checkIfIpBlocked, recordLoginAttempt } from '@/lib/ip-security'
@@ -58,6 +58,12 @@ export async function POST(request: NextRequest) {
       isAdmin: user.isAdmin || false,
     })
   } catch (error) {
+    if (error instanceof DatabaseUnavailableError) {
+      return NextResponse.json(
+        { error: 'Login is temporarily unavailable. Please try again later.' },
+        { status: 503 }
+      )
+    }
     console.error('Login error:', error)
     return NextResponse.json(
       { error: 'Login failed' },

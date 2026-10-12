@@ -2,10 +2,13 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff, Lock, Mail, LogIn, UserPlus } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { secureSetItem } from '@/lib/storage'
+import { secureGetItem, secureSetItem } from '@/lib/storage'
 
-export default function AuthPage() {
+export default function AuthPage({
+  onAuthenticated,
+}: {
+  onAuthenticated: (token: string) => void
+}) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,7 +16,6 @@ export default function AuthPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [blocked, setBlocked] = useState(false)
-  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,12 +43,22 @@ export default function AuthPage() {
         return
       }
 
+      if (typeof data.token !== 'string' || !data.token) {
+        setError('Authentication failed. Please try again.')
+        return
+      }
+
       // Store token — encrypted, never plaintext in browser storage
       secureSetItem('auth_token', data.token)
       secureSetItem('user_id', String(data.userId))
       secureSetItem('is_admin', data.isAdmin ? 'true' : 'false')
 
-      router.push('/')
+      if (secureGetItem('auth_token') !== data.token) {
+        setError('Unable to save your session. Please enable browser storage and try again.')
+        return
+      }
+
+      onAuthenticated(data.token)
     } catch (err) {
       setError('An error occurred. Please try again.')
     } finally {
